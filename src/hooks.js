@@ -76,9 +76,9 @@ const ALIASES = {
   name: ['name', 'full_name', 'fullname', 'your_name', 'your-name', 'customer_name', 'lead_name', 'contact_name', 'sender_name', 'profile_name'],
   first_name: ['first_name', 'firstname', 'fname', 'given_name'],
   last_name: ['last_name', 'lastname', 'lname', 'surname', 'family_name'],
-  phone: ['phone', 'mobile', 'phone_number', 'mobile_number', 'mobileno', 'contact_number', 'tel', 'telephone', 'whatsapp', 'whatsapp_number', 'wa_id', 'contact', 'your-phone'],
+  phone: ['phone', 'mobile', 'phone_number', 'mobile_number', 'mobileno', 'contact_number', 'tel', 'telephone', 'whatsapp', 'whatsapp_number', 'whatsapp_no', 'wa_id', 'contact', 'your-phone'],
   email: ['email', 'email_address', 'e-mail', 'your_email', 'your-email'],
-  city: ['city', 'location', 'town'],
+  city: ['city', 'current_city', 'your_city', 'location', 'town'],
   message: ['message', 'comments', 'comment', 'query', 'enquiry', 'inquiry', 'notes', 'your-message', 'description', 'text'],
   interest: ['interest', 'course', 'program', 'programme', 'service', 'interested_in', 'requirement'],
   campaign: ['campaign', 'campaign_name'], ad: ['ad', 'ad_name'], adset: ['adset', 'adset_name', 'ad_group'], form: ['form', 'form_name'],
@@ -88,7 +88,8 @@ const ALIASES = {
   created_time: ['created_time', 'created_at', 'timestamp'],
 };
 const SKIP = new Set(['_hp', 'key', '_key', 'google_key']);
-const lowerKeys = (o) => { const m = {}; for (const [k, v] of Object.entries(o || {})) m[k.toLowerCase().replace(/\s+/g, '_')] = v; return m; };
+// "WhatsApp Number:" / "Current City?" -> whatsapp_number / current_city (Google Form question titles)
+const lowerKeys = (o) => { const m = {}; for (const [k, v] of Object.entries(o || {})) m[k.toLowerCase().replace(/[^a-z0-9-]+/g, '_').replace(/^_+|_+$/g, '')] = v; return m; };
 
 export function extractLead(payload, mapping = {}) {
   const roots = [payload];
