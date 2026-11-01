@@ -1,0 +1,50 @@
+/* Student page — matches kasturi.ratiforinsightfulliving.com (forest green + cream, Playfair Display + DM Sans). */
+:root {
+  --green: #205b36; --deep: #173b29; --ink: #162820; --muted: #5f6e63; --cream: #f9faf5; --soft: #eef5e9; --line: #e5ebdf; --panel: #fff; --gold: #b8925a; --red: #b42318;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --green: #4fae74; --deep: #cfe8d7; --ink: #e3ece5; --muted: #9fb0a4; --cream: #0c1510; --soft: #16251c; --line: #233529; --panel: #121e17; --gold: #d4b07a; --red: #f87171; color-scheme: dark; }
+  .brand img { filter: brightness(1.8) saturate(.6); }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--cream); color: var(--ink); font: 16px/1.55 "DM Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+a { color: var(--green); }
+h1, h2, h3 { font-family: "Playfair Display", Georgia, serif; color: var(--deep); margin: 0; font-weight: 600; }
+h1 { font-size: clamp(26px, 6vw, 36px); line-height: 1.15; }
+h2 { font-size: 22px; }
+.bar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; max-width: 760px; margin: 0 auto; }
+.brand img { height: 34px; display: block; }
+.link { background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-decoration: underline; padding: 8px; }
+main { max-width: 760px; margin: 0 auto; padding: 8px 16px 40px; }
+.foot { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 16px 40px; }
+.loading { text-align: center; color: var(--muted); padding: 60px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; margin-top: 16px; }
+.hero { background: linear-gradient(135deg, #205b36, #173b29); color: #fff; border: 0; }
+.hero h1, .hero h2 { color: #fff; }
+.hero p { color: #d7e8dc; margin: 8px 0 0; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+.hero .eyebrow { color: #e7cf9f; }
+form.signin { display: grid; gap: 12px; margin-top: 18px; }
+label span { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+input { width: 100%; font: inherit; font-size: 18px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--cream); color: var(--ink); }
+input:focus { outline: 3px solid rgba(32, 91, 54, .2); border-color: var(--green); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 999px; padding: 14px 22px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; background: var(--green); color: #fff; }
+.btn:hover { filter: brightness(1.08); }
+.btn.light { background: #fff; color: var(--deep); }
+.btn.ghost { background: transparent; color: var(--green); border: 1px solid var(--line); }
+.btn[disabled] { opacity: .6; cursor: default; }
+.err { color: var(--red); font-size: 14px; min-height: 20px; }
+.muted { color: var(--muted); }
+.course { display: grid; gap: 10px; }
+.course .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.pill { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--soft); color: var(--green); font-weight: 600; }
+.upd { border-top: 1px solid var(--line); padding: 16px 0; }
+.upd:first-of-type { border-top: 0; padding-top: 4px; }
+.upd h3 { font-size: 18px; margin: 6px 0 4px; }
+.upd p { margin: 6px 0 0; white-space: pre-wrap; }
+.upd .when { font-size: 13px; color: var(--muted); }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
+.tabs button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+.tabs button.on { background: var(--green); color: #fff; border-color: var(--green); }
+.help { font-size: 14px; }

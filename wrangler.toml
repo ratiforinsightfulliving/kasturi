@@ -1,0 +1,26 @@
+name = "kasturi-crm"
+main = "src/worker.js"
+compatibility_date = "2025-10-01"
+workers_dev = true
+# Custom domain (once the domain's DNS is on Cloudflare), e.g.:
+# routes = [{ pattern = "crm.kasturi.in", custom_domain = true }]
+
+# The team CRM (/) and the student portal (/learn/) are static files served free by Workers assets.
+# Only /api/* runs the Worker.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kasturi-crm"
+# Paste the id printed by `npx wrangler d1 create kasturi-crm` here:
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+META_GRAPH_VERSION = "v21.0"
+TIMEZONE_OFFSET_MIN = "330"
+
+[observability]
+enabled = true

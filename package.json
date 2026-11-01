@@ -1,0 +1,17 @@
+{
+  "name": "kasturi-crm",
+  "version": "1.0.0",
+  "description": "Kasturi CRM — leads, follow-ups, enrolments and the student portal, on Cloudflare Workers + D1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:local": "wrangler d1 execute kasturi-crm --local --file schema.sql",
+    "db:remote": "wrangler d1 execute kasturi-crm --remote --file schema.sql",
+    "dev": "wrangler dev",
+    "qa": "node scripts/qa.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.155.0"
+  }
+}

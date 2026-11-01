@@ -1,0 +1,5 @@
+# Copy to .dev.vars for local development. In production: npx wrangler secret put SESSION_SECRET
+SESSION_SECRET=change-me-to-a-long-random-string
+# DEV=1 lets local tests post Meta payloads without calling Facebook
+DEV=1
+# Everything else (Meta app secret, EmailJS keys, WhatsApp) is entered in the CRM under Settings.
