@@ -77,7 +77,7 @@ async function sources(box) {
     <div class="scard"><div class="sbody stack"><h3>Meta app connection <small class="muted">(for Facebook/Instagram Lead Ads and WhatsApp Cloud API)</small></h3>
       <p class="muted">In your Meta developer app → Webhooks, use this callback URL and verify token. Subscribe the <b>Page</b> object to <b>leadgen</b>, and (for WhatsApp) the <b>WhatsApp Business Account</b> object to <b>messages</b>.</p>
       <div class="fgrid"><div><small class="muted">Callback URL</small>${codeBox(cfg.meta_webhook_url)}</div><div><small class="muted">Verify token</small>${codeBox(cfg.meta_verify_token)}</div></div>
-      <form class="row" data-secret style="align-items:flex-end"><div style="flex:1">${input('meta_app_secret', `Meta App Secret ${cfg.has_meta_app_secret ? '(saved ✓ — type to replace)' : '(not saved yet)'}`, '', 'password', 'autocomplete="off" placeholder="App settings → Basic → App secret"')}</div>
+      <form class="row" data-secret style="align-items:flex-end"><div style="flex:1">${input('meta_app_secret', `Meta App Secret ${cfg.has_meta_app_secret ? '(saved ✓ — type to replace)' : '(not saved yet)'}`, '', 'password', 'autocomplete="new-password" data-lpignore="true" placeholder="App settings → Basic → App secret"')}</div>
         <button class="btn">Save</button></form></div></div>
     <div class="scard">${r.items.length ? table([
       { label: 'Source', cell: (s) => h`<div class="cell-main">${s.name}${s.status === 'paused' ? h` <span class="flag">paused</span>` : ''}</div><div class="cell-sub">${SRC[s.type]?.[0] || s.type}</div>` },
@@ -113,7 +113,7 @@ async function sources(box) {
         <li>Subscribe the Page to the app (Graph API: <code>POST /{page-id}/subscribed_apps?subscribed_fields=leadgen</code>) and give the app access under Business Settings → Integrations → Leads access.</li>
         <li>Test with Meta's <a href="https://developers.facebook.com/tools/lead-ads-testing" target="_blank" rel="noopener">Lead Ads Testing Tool</a>. The lead should appear here within seconds.</li></ol>
         <div class="fgrid">${input('page_id', 'Facebook Page ID', s.page_id)}${input('form_ids', 'Only these form IDs (optional, comma separated)', s.form_ids)}
-        <div class="full">${input('page_token', `Page access token ${s.has_page_token ? '(saved ✓ — type to replace)' : ''}`, '', 'password', 'autocomplete="off"')}</div></div>`,
+        <div class="full">${input('page_token', `Page access token ${s.has_page_token ? '(saved ✓ — type to replace)' : ''}`, '', 'password', 'autocomplete="new-password" data-lpignore="true"')}</div></div>`,
       google: h`<ol class="steps"><li>Google Ads → your lead form asset → <b>Lead delivery</b> → Webhook integration.</li><li>Paste this <b>Webhook URL</b> and <b>Key</b>, then click <b>Send test data</b>.</li></ol>
         <small class="muted">Webhook URL</small>${codeBox(`${o}/api/hook/google/${s.key}`)}<small class="muted">Key</small>${codeBox(s.secret || '')}`,
       gform: h`<ol class="steps"><li>Open the enquiry Google Form → ⋮ → <b>Script editor</b> (Apps Script).</li><li>Replace everything with the code below and click <b>Save</b>.</li>
@@ -176,13 +176,13 @@ async function email(box) {
   const log = await get('/email-log');
   setHTML(box, h`${shead('Email (EmailJS)', c.email_provider ? badge('Connected', '#15803d') : badge('Not set up', '#b45309'),
     'Used for the welcome email with the student\'s class page link, and optional update emails. EmailJS free plan: 200 emails a month.')}
-    <form class="scard" data-f><div class="sbody stack">
+    <form class="scard" data-f autocomplete="off"><div class="sbody stack">
       <ol class="steps"><li>Create a free account at <a href="https://www.emailjs.com" target="_blank" rel="noopener">emailjs.com</a> and add an <b>Email Service</b> (e.g. Gmail of Kasturi). Copy its <b>Service ID</b>.</li>
         <li>Create an <b>Email Template</b>: To Email = <code>{{to_email}}</code>, Subject = <code>{{subject}}</code>, Content = <code>{{message}}</code>, From Name = <code>{{from_name}}</code>. Copy the <b>Template ID</b>.</li>
         <li>Account → <b>API keys</b>: copy the Public key and the Private key.</li>
         <li>Account → <b>Security</b>: turn ON "Allow EmailJS API for non-browser applications".</li></ol>
       <div class="fgrid">${input('emailjs_service_id', 'Service ID', c.emailjs_service_id)}${input('emailjs_template_id', 'Template ID', c.emailjs_template_id)}
-        ${input('emailjs_public_key', 'Public key', c.emailjs_public_key)}${input('emailjs_private_key', `Private key ${c.has_emailjs_private_key ? '(saved ✓ — type to replace)' : ''}`, '', 'password', 'autocomplete="off"')}
+        ${input('emailjs_public_key', 'Public key', c.emailjs_public_key, 'text', 'autocomplete="off" data-lpignore="true" spellcheck="false"')}${input('emailjs_private_key', `Private key ${c.has_emailjs_private_key ? '(saved ✓ — type to replace)' : ''}`, '', 'password', 'autocomplete="new-password" data-lpignore="true"')}
         ${input('email_from_name', 'From name', c.email_from_name || c.brand_name)}</div>
       <div class="row end"><button type="button" class="btn ghost" data-test>Send test email to me</button><button class="btn primary">Save</button></div></div></form>
     <div class="scard"><div class="sbody"><h3>Recent emails</h3></div>${table([
