@@ -3,6 +3,9 @@
 Lead and student management for **Kasturi by RATI for Insightful Living**: online meditation classes for IT professionals
 (https://kasturi.ratiforinsightfulliving.com).
 
+**Live:** https://kasturi-crm.ratiforinsightfulliving222.workers.dev (team) · https://kasturi-crm.ratiforinsightfulliving222.workers.dev/learn/ (students)
+Hosted on Kasturi's Cloudflare account (ratiforinsightfulliving222@gmail.com), Worker `kasturi-crm`, D1 database `kasturi-crm`.
+
 It has two parts. Both are served by the same Cloudflare Worker:
 
 | Who | Address | What they do |
