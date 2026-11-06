@@ -1,13 +1,14 @@
 // ingestLead(): the ONLY way a lead enters the CRM (Meta, Google, website, WhatsApp, manual add, CSV import, tests).
 // A repeat enquiry (same phone or email) never makes a second lead: it is added to the existing lead's
 // timeline, its enquiry count goes up, and it moves to the top of the list.
+// File imports pass onRepeat:'skip' for rows without an id, so re-uploading the same sheet adds nothing.
 import { nowIST, normPhone, normEmail, str } from './lib.js';
 
 const LEAD_COLS = ['name', 'city', 'message', 'interest', 'campaign', 'adset', 'ad', 'form', 'platform',
   'utm_source', 'utm_medium', 'utm_campaign', 'landing_page'];
 const LOST_STAGES = "SELECT id FROM stages WHERE kind IN ('lost')";
 
-export async function ingestLead(db, { sourceId = null, data, createdAt = null, actorId = null, kind = 'system' }) {
+export async function ingestLead(db, { sourceId = null, data, createdAt = null, actorId = null, kind = 'system', onRepeat = 'merge' }) {
   const phone = normPhone(data.phone);
   const email = normEmail(data.email);
   const externalId = str(data.external_id, 120);
@@ -15,9 +16,9 @@ export async function ingestLead(db, { sourceId = null, data, createdAt = null, 
   const created = createdAt || now;
   const srcName = data._source_name || 'manual entry';
 
-  // 1) Same Meta leadgen_id / Google lead_id twice -> ignore.
+  // 1) Same Meta leadgen_id / Google lead_id twice -> ignore. Ids merged into an older lead live in lead_ext_ids.
   if (externalId) {
-    const ex = await db.val('SELECT id FROM leads WHERE external_id=?', externalId);
+    const ex = await db.val(`SELECT id FROM leads WHERE external_id=? UNION ALL SELECT lead_id FROM lead_ext_ids WHERE external_id=? LIMIT 1`, externalId, externalId);
     if (ex) return { id: ex, existing: true };
   }
 
@@ -27,6 +28,7 @@ export async function ingestLead(db, { sourceId = null, data, createdAt = null, 
     if (phone) { parts.push('SELECT id, owner_id, stage_id FROM (SELECT * FROM leads WHERE phone=? ORDER BY id LIMIT 1)'); args.push(phone); }
     if (email) { parts.push('SELECT id, owner_id, stage_id FROM (SELECT * FROM leads WHERE email=? ORDER BY id LIMIT 1)'); args.push(email); }
     const m = await db.first(`${parts.join(' UNION ALL ')} ORDER BY id LIMIT 1`, ...args);
+    if (m && onRepeat === 'skip') return { id: m.id, existing: true };
     if (m) {
       const note = kind === 'whatsapp'
         ? `WhatsApp: ${str(data.message, 3000) || '(no text)'}`
@@ -38,6 +40,7 @@ export async function ingestLead(db, { sourceId = null, data, createdAt = null, 
           kind === 'whatsapp' ? 0 : 1, now, str(data.name, 120), email, phone, m.id),
         db.stmt(`INSERT INTO activities (lead_id,user_id,type,note,created_at) VALUES (?,?,?,?,?)`, m.id, actorId, kind === 'whatsapp' ? 'whatsapp' : 'system', note, now),
         sourceId && db.stmt('UPDATE sources SET lead_count=lead_count+1, last_lead_at=?, last_error=NULL WHERE id=?', now, sourceId),
+        externalId && db.stmt('INSERT OR IGNORE INTO lead_ext_ids (external_id,lead_id) VALUES (?,?)', externalId, m.id),
       ]);
       return { id: m.id, existing: true, repeat: true, owner_id: m.owner_id };
     }

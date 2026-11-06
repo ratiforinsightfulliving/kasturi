@@ -201,19 +201,50 @@ export async function bulkLeads(ctx) {
   return json({ ok: true, n: ids.length });
 }
 
-// CSV import: the browser parses the file and sends rows as objects ({name, phone, email, city, interest, message}).
+// File import (Meta Leads Center ZIP/CSV, Excel, any sheet): the browser reads the file and sends rows as objects
+// ({external_id, created_time, name, phone, email, city, interest, message, campaign, adset, ad, form, platform, extra}).
+// Rows with a Meta lead id are matched on that id; rows without one are skipped when the phone/email already exists,
+// so the same full export can be uploaded every day and only new people are added.
+const IMPORT_COLS = ['name', 'phone', 'email', 'city', 'interest', 'message', 'campaign', 'adset', 'ad', 'form', 'platform'];
 export async function importLeads(ctx) {
   if (!isAdmin(ctx)) forbid('Only admins can import');
   const b = await ctx.body();
-  const rows = Array.isArray(b.rows) ? b.rows.slice(0, 8) : []; // the browser sends 8 rows per request (D1 query budget)
-  let added = 0, repeat = 0, skipped = 0;
+  const rows = Array.isArray(b.rows) ? b.rows.slice(0, 5) : []; // the browser sends 5 rows per request (D1 query budget)
+  const srcName = (int(b.source_id) && (await ctx.db.val('SELECT name FROM sources WHERE id=?', int(b.source_id)))) || 'file import';
+  let added = 0, repeat = 0, existing = 0, skipped = 0;
   for (const r of rows) {
-    if (!normPhone(r.phone) && !normEmail(r.email)) { skipped++; continue; }
-    const out = await ingestLead(ctx.db, { sourceId: int(b.source_id), actorId: ctx.user.id,
-      data: { ...r, owner_id: int(b.owner_id) || null, _source_name: 'CSV import' } });
-    if (out.existing) repeat++; else added++;
+    if (!r || (!normPhone(r.phone) && !normEmail(r.email))) { skipped++; continue; }
+    const data = { owner_id: int(b.owner_id) || null, _source_name: srcName + ' (file)' };
+    for (const k of IMPORT_COLS) if (r[k] != null && r[k] !== '') data[k] = String(r[k]);
+    const ext = str(r.external_id, 120);
+    if (ext) data.external_id = ext;
+    if (r.extra && typeof r.extra === 'object') {
+      data.extra = {};
+      for (const [k, v] of Object.entries(r.extra).slice(0, 40)) if (v != null && v !== '') data.extra[String(k).slice(0, 80)] = String(v).slice(0, 500);
+    }
+    const out = await ingestLead(ctx.db, { sourceId: int(b.source_id), actorId: ctx.user.id, data,
+      createdAt: r.created_time ? toIST(r.created_time) : null, onRepeat: ext ? 'merge' : 'skip' });
+    if (out.repeat) repeat++; else if (out.existing) existing++; else added++;
   }
-  return json({ ok: true, added, repeat, skipped });
+  return json({ ok: true, added, repeat, existing, skipped });
+}
+
+// Before importing: which of these Meta lead ids / phones / emails are already in the CRM? (lets the browser send only new rows)
+export async function importCheck(ctx) {
+  if (!isAdmin(ctx)) forbid('Only admins can import');
+  const b = await ctx.body();
+  const take = (arr, fn) => [...new Set((Array.isArray(arr) ? arr : []).map(fn).filter(Boolean))].slice(0, 450);
+  const ids = take(b.ids, (x) => str(x, 120)), phones = take(b.phones, normPhone), emails = take(b.emails, normEmail);
+  const known = { ids: [], phones: [], emails: [] };
+  const chunks = (arr) => { const o = []; for (let i = 0; i < arr.length; i += 90) o.push(arr.slice(i, i + 90)); return o; };
+  for (const c of chunks(ids)) {
+    const ph = c.map(() => '?').join(',');
+    const rows = await ctx.db.all(`SELECT external_id AS v FROM leads WHERE external_id IN (${ph}) UNION SELECT external_id FROM lead_ext_ids WHERE external_id IN (${ph})`, ...c, ...c);
+    known.ids.push(...rows.map((x) => x.v));
+  }
+  for (const c of chunks(phones)) known.phones.push(...(await ctx.db.all(`SELECT DISTINCT phone AS v FROM leads WHERE phone IN (${c.map(() => '?').join(',')})`, ...c)).map((x) => x.v));
+  for (const c of chunks(emails)) known.emails.push(...(await ctx.db.all(`SELECT DISTINCT email AS v FROM leads WHERE email IN (${c.map(() => '?').join(',')})`, ...c)).map((x) => x.v));
+  return json(known);
 }
 
 export async function exportLeads(ctx) {

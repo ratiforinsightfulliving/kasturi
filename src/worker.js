@@ -41,6 +41,7 @@ r.get('/api/leads', leads.listLeads);
 r.post('/api/leads', leads.createLead);
 r.post('/api/leads/bulk', leads.bulkLeads);
 r.post('/api/leads/import', leads.importLeads);
+r.post('/api/leads/import-check', leads.importCheck);
 r.get('/api/leads/export', leads.exportLeads);
 r.get('/api/leads/:id', leads.getLead);
 r.patch('/api/leads/:id', leads.updateLead);

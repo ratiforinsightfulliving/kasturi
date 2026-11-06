@@ -1,9 +1,9 @@
 // Leads inbox + lead drawer (call, WhatsApp, email, notes, follow-up, stage, enrol) and the Follow-ups page.
 import {
   h, raw, ic, $, $$, on, setHTML, state, get, post, patch, qs, toast, errToast, modal, drawer, closeDrawer, input, textarea, select, check, field,
-  pagedTable, table, badge, tabs, fdt, cap, phoneFmt, copyText, parseCSV, esc, options, inr,
+  pagedTable, table, badge, tabs, fdt, cap, phoneFmt, copyText, esc, options, inr,
 } from '../core.js';
-import { setTitle, isAdmin, stageOf, userName, sourceName, refreshCounts } from '../main.js';
+import { setTitle, isAdmin, stageOf, userName, sourceName, refreshCounts, reloadMeta } from '../main.js';
 
 const OUTCOME_LABEL = { connected: 'Connected', no_answer: 'No answer', busy: 'Busy', switched_off: 'Switched off', wrong_number: 'Wrong number', call_back: 'Call back later' };
 const ACT_ICON = { call: 'phone', whatsapp: 'chat', email: 'inbox', note: 'edit', stage: 'refresh', system: 'star' };
@@ -42,7 +42,7 @@ export async function leads(view, params, query) {
       ${isAdmin() || me.config.counsellor_all ? h`<select name="owner">${raw(options(ownerOpts, f.owner))}</select>` : ''}
       <label class="check"><input type="checkbox" name="fresh" ${f.fresh ? raw('checked') : ''}> <span>Not called yet</span></label>
       <div class="sp" style="flex:1"></div>
-      ${isAdmin() ? h`<button class="btn ghost" data-import>${ic('upload')} Import</button><button class="btn ghost" data-export>${ic('download')} Export</button>` : ''}
+      ${isAdmin() ? h`<button class="btn ghost" data-import>${ic('upload')} Import (Meta / Excel / CSV)</button><button class="btn ghost" data-export>${ic('download')} Export</button>` : ''}
       <button class="btn primary" data-add>${ic('plus')} Add lead</button>
     </div>
     <div class="bulkbar" id="bulk" hidden></div>
@@ -71,7 +71,7 @@ export async function leads(view, params, query) {
   on(view, 'click', '[data-open]', (e, tr) => { if (e.target.closest('input,a')) return; openLead(Number(tr.dataset.open), pt.reload); });
   on(view, 'click', '[data-add]', () => addLead(pt.reload));
   on(view, 'click', '[data-export]', () => { location.href = '/api/leads/export' + listQ(); });
-  on(view, 'click', '[data-import]', () => importCsv(pt.reload));
+  on(view, 'click', '[data-import]', () => importLeads(pt.reload));
 
   // Bulk actions
   const bulk = $('#bulk', view);
@@ -140,35 +140,74 @@ function addLead(done) {
   });
 }
 
-function importCsv(done) {
+// Import a Meta Leads Center download (ZIP / CSV), an Excel sheet or any CSV. The same full export can be uploaded
+// every day: leads already in the CRM (same Meta lead id, or same phone/email for files without ids) are left out.
+function importLeads(done) {
   const me = state.me;
-  modal({
-    title: 'Import leads from CSV',
-    body: h`<p class="muted">Use a CSV with a header row. Columns we read: <b>name, phone, email, city, interest, message</b> (other columns are ignored). Phone numbers already in the CRM are not duplicated.</p>
-      ${field('CSV file', raw('<input type="file" name="file" accept=".csv,text/csv" required>'))}
-      ${select('source_id', 'Mark as source', me.sources.map((s) => [s.id, s.name]), '', 'Added manually')}
-      ${select('owner_id', 'Assign to', me.users.filter((u) => u.active).map((u) => [u.id, u.name]), '', 'Round-robin (automatic)')}
+  const metaSrc = me.sources.find((s) => s.type === 'meta');
+  let parsed = null, fresh = [];
+  const m = modal({
+    title: 'Import leads',
+    wide: true,
+    body: h`<p class="muted">Upload the <b>Meta lead export</b> (the .zip or .csv from Meta Leads Center / Ads Manager → Download leads), an <b>Excel</b> (.xlsx) or any <b>CSV</b>.
+      You can upload the full export every day — leads already in the CRM are skipped automatically, only new people are added.</p>
+      ${field('File(s)', raw('<input type="file" name="file" accept=".zip,.csv,.tsv,.txt,.xlsx,.xls" multiple required data-file>'))}
+      <div id="imp-sum" class="note" hidden></div>
+      <div class="fgrid">
+        ${select('source_id', 'Mark leads as coming from', [...me.sources.map((s) => [s.id, s.name]), ...(metaSrc ? [] : [['__meta', 'Meta Lead Ads (new source)']])], metaSrc ? metaSrc.id : '__meta', 'Added manually')}
+        ${select('owner_id', 'Assign to', me.users.filter((u) => u.active).map((u) => [u.id, u.name]), '', 'Round-robin (automatic)')}
+      </div>
       <div id="imp-prog" class="muted"></div>`,
-    submit: 'Import',
+    submit: 'Import new leads',
+    onOpen: (form) => {
+      form.file.addEventListener('change', async () => {
+        const sum = $('#imp-sum', form);
+        parsed = null; fresh = [];
+        if (!form.file.files.length) { sum.hidden = true; return; }
+        sum.hidden = false; sum.className = 'note'; sum.textContent = 'Reading file…';
+        try {
+          const { readLeadFiles } = await import('../importer.js');
+          parsed = await readLeadFiles([...form.file.files]);
+          const rows = parsed.rows;
+          const known = await post('/leads/import-check', {
+            ids: rows.map((r) => r.external_id).filter(Boolean),
+            phones: rows.map((r) => r.phone).filter(Boolean), emails: rows.map((r) => r.email).filter(Boolean),
+          });
+          const ids = new Set(known.ids), phones = new Set(known.phones), emails = new Set(known.emails.map((e) => e.toLowerCase()));
+          const last10 = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+          const knownPhone = new Set([...phones].map(last10));
+          // With a Meta id: new unless that id is known. Without: new unless the phone or email is already a lead.
+          fresh = rows.filter((r) => (r.external_id ? !ids.has(r.external_id)
+            : !(r.phone && knownPhone.has(last10(r.phone))) && !(r.email && emails.has(r.email.toLowerCase()))));
+          const already = rows.length - fresh.length;
+          setHTML(sum, h`<b>${rows.length} lead${rows.length === 1 ? '' : 's'}</b> found in ${parsed.files.length} file${parsed.files.length === 1 ? '' : 's'}
+            · <b>${fresh.length} new</b> · ${already} already in the CRM (skipped)${parsed.skipped ? h` · ${parsed.skipped} rows without phone/email ignored` : ''}
+            <div class="muted" style="margin-top:4px;font-size:12px">${parsed.files.map((f) => `${f.name} (${f.rows})`).join(' · ')}</div>`);
+          sum.className = fresh.length ? 'note info' : 'note';
+        } catch (ex) { sum.className = 'note warn'; sum.textContent = ex.message; parsed = null; }
+      });
+    },
     onSubmit: async (d, form) => {
-      if (!d.file) throw new Error('Choose a CSV file');
-      const rows = parseCSV(await d.file.text());
-      if (rows.length < 2) throw new Error('The file has no data rows');
-      const head = rows[0].map((x) => x.trim().toLowerCase().replace(/[\s-]+/g, '_'));
-      const pick = (r, ...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0 && r[i]) return r[i].trim(); } return ''; };
-      const items = rows.slice(1).map((r) => ({ name: pick(r, 'name', 'full_name'), phone: pick(r, 'phone', 'mobile', 'phone_number', 'whatsapp'), email: pick(r, 'email', 'email_address'),
-        city: pick(r, 'city', 'location'), interest: pick(r, 'interest', 'course'), message: pick(r, 'message', 'notes', 'comments') }));
-      const tot = { added: 0, repeat: 0, skipped: 0 };
-      const prog = $('#imp-prog', form);
-      for (let i = 0; i < items.length; i += 8) {
-        const r = await post('/leads/import', { rows: items.slice(i, i + 8), source_id: d.source_id, owner_id: d.owner_id });
-        tot.added += r.added; tot.repeat += r.repeat; tot.skipped += r.skipped;
-        prog.textContent = `Imported ${Math.min(i + 8, items.length)} of ${items.length}…`;
+      if (!parsed) throw new Error('Choose the file first and wait until it has been read');
+      if (!fresh.length) { toast('Nothing new to import — all these leads are already in the CRM'); return; }
+      let sourceId = d.source_id;
+      if (sourceId === '__meta') {
+        sourceId = (await post('/sources', { type: 'meta', name: 'Meta Lead Ads' })).id;
+        await reloadMeta();
       }
-      toast(`${tot.added} added, ${tot.repeat} already existed, ${tot.skipped} skipped (no phone/email)`);
+      const tot = { added: 0, repeat: 0, existing: 0, skipped: 0 };
+      const prog = $('#imp-prog', form);
+      for (let i = 0; i < fresh.length; i += 5) {
+        const r = await post('/leads/import', { rows: fresh.slice(i, i + 5), source_id: sourceId, owner_id: d.owner_id });
+        for (const k of Object.keys(tot)) tot[k] += r[k] || 0;
+        prog.textContent = `Importing ${Math.min(i + 5, fresh.length)} of ${fresh.length}…`;
+      }
+      toast(`${tot.added} new lead${tot.added === 1 ? '' : 's'} added${tot.repeat ? ` · ${tot.repeat} matched an existing lead (added to its history)` : ''}${tot.existing ? ` · ${tot.existing} already there` : ''}`);
       done && done();
+      refreshCounts();
     },
   });
+  return m;
 }
 
 // ---------- Lead drawer ----------

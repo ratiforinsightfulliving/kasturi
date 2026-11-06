@@ -75,6 +75,10 @@ CREATE INDEX IF NOT EXISTS leads_owner ON leads(owner_id, id);
 CREATE INDEX IF NOT EXISTS leads_day ON leads(created_day);
 CREATE INDEX IF NOT EXISTS leads_fu ON leads(next_followup_at) WHERE next_followup_at IS NOT NULL;
 
+-- Meta / Google lead ids that were merged into an older lead (same person enquiring again),
+-- so a daily re-import of the full export never adds them twice.
+CREATE TABLE IF NOT EXISTS lead_ext_ids (external_id TEXT PRIMARY KEY, lead_id INTEGER NOT NULL);
+
 CREATE TABLE IF NOT EXISTS activities (
   id INTEGER PRIMARY KEY,
   lead_id INTEGER NOT NULL,

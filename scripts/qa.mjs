@@ -138,7 +138,7 @@ ok(r.data.activities.filter((a) => a.type === 'whatsapp').length === 2, 'whatsap
 r = await admin('GET', `/api/leads/${webLead}`);
 ok(r.data.lead.enquiry_count === 2 && r.data.lead.interest === 'Kasturi Meditation' && r.data.lead.utm_source === 'insta', 'web lead fields + count', r.data.lead);
 r = await admin('GET', `/api/leads/${gformLead}`);
-ok(r.data.lead.city === 'Kolkata' || r.data.lead.extra['which_city?'] === 'Kolkata', 'google form answers kept', r.data.lead);
+ok(r.data.lead.city === 'Kolkata' || r.data.lead.extra.which_city === 'Kolkata', 'google form answers kept', r.data.lead);
 r = await admin('GET', '/api/leads?q=' + stamp + '01');
 ok(r.data.items.length === 1 && r.data.items[0].id === webLead, 'search by phone');
 r = await admin('GET', '/api/leads?fresh=1');
@@ -154,10 +154,11 @@ r = await coun('POST', '/api/leads/bulk', { ids: [webLead], action: 'assign', ow
 ok(r.status === 403, 'counsellor cannot reassign');
 
 // call log
-r = await coun('POST', `/api/leads/${webLead}/log`, { type: 'call', outcome: 'connected', note: 'Interested, call back Friday', next_followup_at: '2026-11-06T18:00' });
+const fu = new Date(Date.now() + 330 * 60000 + 3 * 86400000).toISOString().slice(0, 10); // 3 days ahead (IST)
+r = await coun('POST', `/api/leads/${webLead}/log`, { type: 'call', outcome: 'connected', note: 'Interested, call back Friday', next_followup_at: fu + 'T18:00' });
 ok(r.status === 200, 'log call');
 r = await coun('GET', `/api/leads/${webLead}`);
-ok(r.data.lead.stage_id === 2 && r.data.lead.next_followup_at === '2026-11-06 18:00:00' && r.data.lead.last_contact_at, 'call moves New→Contacted + sets follow-up', r.data.lead);
+ok(r.data.lead.stage_id === 2 && r.data.lead.next_followup_at === fu + ' 18:00:00' && r.data.lead.last_contact_at, 'call moves New→Contacted + sets follow-up', r.data.lead);
 r = await coun('PATCH', `/api/leads/${webLead}`, { stage_id: 5 });
 ok(r.status === 400, 'cannot set Enrolled without enrolment');
 r = await coun('GET', '/api/counts');
@@ -224,6 +225,37 @@ ok(r.status === 200 && r.data.lead.id, 'test lead button');
 r = await admin('GET', '/api/dashboard');
 ok(r.status === 200 && r.data.bySource.length && r.data.revenue.amount >= 5500, 'dashboard', r.data.revenue);
 ok(Number(r.headers.get('x-queries')) <= 45, 'dashboard within query budget', r.headers.get('x-queries'));
+
+// ---- file import (Meta export / Excel / CSV), re-uploaded daily ----
+const metaRows = [
+  { external_id: 'M1' + stamp, created_time: '2026-11-03T10:16:51+05:30', name: 'Meta File One', phone: '+9188' + stamp + '11', email: `m1${stamp}@example.com`, city: 'Pune',
+    campaign: 'KASTURI LEAD CAMPAIGN', ad: 'Reel', form: 'KASTURI FORM', platform: 'instagram', extra: { how_soon_would_you_like_to_start_the_program: 'immediately' } },
+  { external_id: 'M2' + stamp, name: 'Meta File Two', phone: '+9188' + stamp + '12', platform: 'facebook' },
+  // a new Meta lead id for someone already in the CRM (Priya from the website)
+  { external_id: 'M3' + stamp, name: 'Priya via Meta', phone: phone },
+];
+r = await coun('POST', '/api/leads/import', { rows: metaRows });
+ok(r.status === 403, 'counsellor cannot import');
+r = await admin('POST', '/api/leads/import-check', { ids: metaRows.map((x) => x.external_id), phones: metaRows.map((x) => x.phone) });
+ok(r.status === 200 && r.data.ids.length === 0 && r.data.phones.length === 1, 'import-check: ids new, Priya phone known', r.data);
+r = await admin('POST', '/api/leads/import', { rows: metaRows, source_id: ids.meta });
+ok(r.data.added === 2 && r.data.repeat === 1, 'first import: 2 added, 1 merged into existing', r.data);
+r = await admin('POST', '/api/leads/import', { rows: metaRows, source_id: ids.meta });
+ok(r.data.added === 0 && r.data.repeat === 0 && r.data.existing === 3, 'same export again: nothing added or merged', r.data);
+r = await admin('POST', '/api/leads/import-check', { ids: metaRows.map((x) => x.external_id) });
+ok(r.data.ids.length === 3, 'import-check knows all 3 ids (incl. merged one)', r.data);
+r = await admin('GET', '/api/leads?q=' + stamp + '11');
+const fileLead = r.data.items[0];
+r = await admin('GET', `/api/leads/${fileLead.id}`);
+ok(r.data.lead.created_at === '2026-11-03 10:16:51' && r.data.lead.campaign === 'KASTURI LEAD CAMPAIGN' && r.data.lead.platform === 'instagram'
+  && r.data.lead.extra.how_soon_would_you_like_to_start_the_program === 'immediately' && r.data.lead.external_id === 'M1' + stamp, 'imported lead keeps date, campaign, answers, id', r.data.lead);
+const sheetRows = [{ name: 'Sheet Person', phone: '87' + stamp + '13' }, { name: 'Priya again', phone }];
+r = await admin('POST', '/api/leads/import', { rows: sheetRows });
+ok(r.data.added === 1 && r.data.existing === 1 && r.data.repeat === 0, 'sheet without ids: existing phone skipped silently', r.data);
+r = await admin('POST', '/api/leads/import', { rows: sheetRows });
+ok(r.data.added === 0 && r.data.existing === 2, 'same sheet again: nothing added', r.data);
+r = await admin('GET', `/api/leads/${webLead}`);
+ok(r.data.lead.enquiry_count === 3, 'Priya: one merge from Meta file, none from re-uploads', r.data.lead.enquiry_count);
 
 // ---- static ----
 r = await anon('GET', '/learn/');
